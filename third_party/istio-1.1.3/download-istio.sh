@@ -25,8 +25,8 @@ helm template --namespace=istio-system \
   --set gateways.custom-gateway.labels.app='cluster-local-gateway' \
   --set gateways.custom-gateway.labels.istio='cluster-local-gateway' \
   --set gateways.custom-gateway.type='ClusterIP' \
-  --set gateways.istio-ingressgateway.enabled=false \
-  --set gateways.istio-egressgateway.enabled=false \
+  --set gateways.istio-ingressgateway.enabled=true \
+  --set gateways.istio-egressgateway.enabled=true \
   --set gateways.istio-ilbgateway.enabled=false \
   install/kubernetes/helm/istio \
   -f install/kubernetes/helm/istio/example-values/values-istio-gateways.yaml \

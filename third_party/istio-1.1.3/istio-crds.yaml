@@ -21,7 +21,7 @@ data:
     metadata:
       name: virtualservices.networking.istio.io
       labels:
-        app: istio-pilot
+        app: istio-pilo
         chart: istio
         heritage: Tiller
         release: istio
@@ -31,7 +31,7 @@ data:
       group: networking.istio.io
       names:
         kind: VirtualService
-        listKind: VirtualServiceList
+        listKind: VirtualServiceLis
         plural: virtualservices
         singular: virtualservice
         shortNames:
@@ -47,7 +47,7 @@ data:
         name: Gateways
         type: string
       - JSONPath: .spec.hosts
-        description: The destination hosts to which traffic is being sent
+        description: The destination hosts to which traffic is being sen
         name: Hosts
         type: string
       - JSONPath: .metadata.creationTimestamp
@@ -63,7 +63,7 @@ data:
     metadata:
       name: destinationrules.networking.istio.io
       labels:
-        app: istio-pilot
+        app: istio-pilo
         chart: istio
         heritage: Tiller
         release: istio
@@ -73,7 +73,7 @@ data:
       group: networking.istio.io
       names:
         kind: DestinationRule
-        listKind: DestinationRuleList
+        listKind: DestinationRuleLis
         plural: destinationrules
         singular: destinationrule
         shortNames:
@@ -84,9 +84,9 @@ data:
       scope: Namespaced
       version: v1alpha3
       additionalPrinterColumns:
-      - JSONPath: .spec.host
+      - JSONPath: .spec.hos
         description: The name of a service from the service registry
-        name: Host
+        name: Hos
         type: string
       - JSONPath: .metadata.creationTimestamp
         description: |-
@@ -101,7 +101,7 @@ data:
     metadata:
       name: serviceentries.networking.istio.io
       labels:
-        app: istio-pilot
+        app: istio-pilo
         chart: istio
         heritage: Tiller
         release: istio
@@ -111,7 +111,7 @@ data:
       group: networking.istio.io
       names:
         kind: ServiceEntry
-        listKind: ServiceEntryList
+        listKind: ServiceEntryLis
         plural: serviceentries
         singular: serviceentry
         shortNames:
@@ -147,7 +147,7 @@ data:
     metadata:
       name: gateways.networking.istio.io
       labels:
-        app: istio-pilot
+        app: istio-pilo
         chart: istio
         heritage: Tiller
         release: istio
@@ -172,7 +172,7 @@ data:
     metadata:
       name: envoyfilters.networking.istio.io
       labels:
-        app: istio-pilot
+        app: istio-pilo
         chart: istio
         heritage: Tiller
         release: istio
@@ -195,7 +195,7 @@ data:
     metadata:
       name: clusterrbacconfigs.rbac.istio.io
       labels:
-        app: istio-pilot
+        app: istio-pilo
         istio: rbac
         heritage: Tiller
         release: istio
@@ -251,7 +251,7 @@ data:
       group: authentication.istio.io
       names:
         kind: MeshPolicy
-        listKind: MeshPolicyList
+        listKind: MeshPolicyLis
         plural: meshpolicies
         singular: meshpolicy
         categories:
@@ -393,9 +393,9 @@ data:
     spec:
       group: config.istio.io
       names:
-        kind: attributemanifest
+        kind: attributemanifes
         plural: attributemanifests
-        singular: attributemanifest
+        singular: attributemanifes
         categories:
         - istio-io
         - policy-istio-io
@@ -1366,7 +1366,7 @@ data:
     metadata:
       name: sidecars.networking.istio.io
       labels:
-        app: istio-pilot
+        app: istio-pilo
         chart: istio
         heritage: Tiller
         release: istio
@@ -1411,13 +1411,13 @@ data:
 ---
 # Source: istio-init/templates/serviceaccount.yaml
 apiVersion: v1
-kind: ServiceAccount
+kind: ServiceAccoun
 metadata:
-  name: istio-init-service-account
+  name: istio-init-service-accoun
   namespace: istio-system
   labels:
-    app: istio-init
-    istio: init
+    app: istio-ini
+    istio: ini
 
 
 ---
@@ -1427,8 +1427,8 @@ kind: ClusterRole
 metadata:
   name: istio-init-istio-system
   labels:
-    app: istio-init
-    istio: istio-init
+    app: istio-ini
+    istio: istio-ini
 rules:
 - apiGroups: [""]
   resources: ["configmaps"]
@@ -1444,15 +1444,15 @@ kind: ClusterRoleBinding
 metadata:
   name: istio-init-admin-role-binding-istio-system
   labels:
-    app: istio-init
-    istio: init
+    app: istio-ini
+    istio: ini
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: istio-init-istio-system
 subjects:
-  - kind: ServiceAccount
-    name: istio-init-service-account
+  - kind: ServiceAccoun
+    name: istio-init-service-accoun
     namespace: istio-system
 
 ---
@@ -1468,11 +1468,11 @@ spec:
       annotations:
         sidecar.istio.io/inject: "false"
     spec:
-      serviceAccountName: istio-init-service-account
+      serviceAccountName: istio-init-service-accoun
       containers:
       - name: istio-init-crd-10
         image: "docker.io/istio/kubectl:1.1.3"
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: IfNotPresen
         volumeMounts:
         - name: crd-10
           mountPath: /etc/istio/crd-10
@@ -1497,11 +1497,11 @@ spec:
       annotations:
         sidecar.istio.io/inject: "false"
     spec:
-      serviceAccountName: istio-init-service-account
+      serviceAccountName: istio-init-service-accoun
       containers:
       - name: istio-init-crd-11
         image: "docker.io/istio/kubectl:1.1.3"
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: IfNotPresen
         volumeMounts:
         - name: crd-11
           mountPath: /etc/istio/crd-11

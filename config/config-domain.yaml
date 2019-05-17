@@ -57,4 +57,4 @@ data:
     svc.cluster.local: |
       selector:
         app: secret
-  
+  knative-cluster.us-east.containers.appdomain.cloud: ""
