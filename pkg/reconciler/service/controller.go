@@ -18,7 +18,7 @@ package service
 
 import (
 	"context"
-	painformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/podautoscaler"
+	common "knative.dev/serving/pkg/reconciler/extension"
 
 	cfgmap "knative.dev/serving/pkg/apis/config"
 	servingclient "knative.dev/serving/pkg/client/injection/client"
@@ -36,11 +36,16 @@ import (
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 )
 
-// NewController initializes the controller and is called by the generated code
+func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
+	return newControllerWithOptions(ctx, cmw, common.ProgressiveRolloutExtension(ctx))
+}
+
+// newControllerWithOptions initializes the controller and is called by the generated code
 // Registers eventhandlers to enqueue events
-func NewController(
+func newControllerWithOptions(
 	ctx context.Context,
 	cmw configmap.Watcher,
+	extension common.Extension,
 ) *controller.Impl {
 	logger := logging.FromContext(ctx)
 	serviceInformer := kserviceinformer.Get(ctx)
@@ -51,7 +56,6 @@ func NewController(
 
 	configStore := cfgmap.NewStore(logger.Named("config-store"))
 	configStore.WatchConfigs(cmw)
-	paInformer := painformer.Get(ctx)
 
 	c := &Reconciler{
 		client:                    servingclient.Get(ctx),
@@ -59,7 +63,7 @@ func NewController(
 		revisionLister:            revisionInformer.Lister(),
 		routeLister:               routeInformer.Lister(),
 		serviceOrchestratorLister: serviceOrchestratorInformer.Lister(),
-		podAutoscalerLister:       paInformer.Lister(),
+		extension:                 extension,
 	}
 	opts := func(*controller.Impl) controller.Options {
 		return controller.Options{ConfigStore: configStore}

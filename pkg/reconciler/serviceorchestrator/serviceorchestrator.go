@@ -26,6 +26,7 @@ import (
 	"knative.dev/pkg/logging"
 	"knative.dev/pkg/ptr"
 	pkgreconciler "knative.dev/pkg/reconciler"
+	"knative.dev/serving/pkg/apis/serving"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	clientset "knative.dev/serving/pkg/client/clientset/versioned"
 	soreconciler "knative.dev/serving/pkg/client/injection/reconciler/serving/v1/serviceorchestrator"
@@ -169,10 +170,12 @@ func LatestEqual(t1, t2 []v1.RevisionTarget) bool {
 }
 
 func (c *Reconciler) createStagePA(ctx context.Context, so *v1.ServiceOrchestrator, revision *v1.RevisionTarget, scaleUpReady bool) error {
+
 	spa := &v1.StagePodAutoscaler{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      revision.RevisionName,
 			Namespace: so.Namespace,
+			Labels:    map[string]string{serving.RevisionLabelKey: revision.RevisionName},
 			OwnerReferences: []metav1.OwnerReference{
 				*kmeta.NewControllerRef(so),
 			},

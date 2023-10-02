@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"k8s.io/client-go/tools/cache"
+	common "knative.dev/serving/pkg/reconciler/extension"
 	"net/http"
 	"time"
 
@@ -33,6 +34,7 @@ import (
 	servingclient "knative.dev/serving/pkg/client/injection/client"
 	painformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/podautoscaler"
 	revisioninformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/revision"
+	spainformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/stagepodautoscaler"
 	revisionreconciler "knative.dev/serving/pkg/client/injection/reconciler/serving/v1/revision"
 
 	"k8s.io/client-go/util/workqueue"
@@ -41,7 +43,9 @@ import (
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
 	"knative.dev/pkg/metrics"
+	pkgreconciler "knative.dev/pkg/reconciler"
 	apisconfig "knative.dev/serving/pkg/apis/config"
+	"knative.dev/serving/pkg/apis/serving"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	"knative.dev/serving/pkg/deployment"
 	"knative.dev/serving/pkg/reconciler/revision/config"
@@ -52,13 +56,8 @@ import (
 // resolution's Transport will also be set to this value.
 const digestResolutionWorkers = 100
 
-// NewController initializes the controller and is called by the generated code
-// Registers eventhandlers to enqueue events
-func NewController(
-	ctx context.Context,
-	cmw configmap.Watcher,
-) *controller.Impl {
-	return newControllerWithOptions(ctx, cmw)
+func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
+	return newControllerWithOptions(ctx, cmw, common.ProgressiveRolloutExtension(ctx))
 }
 
 type reconcilerOption func(*Reconciler)
@@ -66,6 +65,7 @@ type reconcilerOption func(*Reconciler)
 func newControllerWithOptions(
 	ctx context.Context,
 	cmw configmap.Watcher,
+	extension common.Extension,
 	opts ...reconcilerOption,
 ) *controller.Impl {
 	logger := logging.FromContext(ctx)
@@ -73,6 +73,7 @@ func newControllerWithOptions(
 	deploymentInformer := deploymentinformer.Get(ctx)
 	imageInformer := imageinformer.Get(ctx)
 	paInformer := painformer.Get(ctx)
+	spaInformer := spainformer.Get(ctx)
 
 	c := &Reconciler{
 		kubeclient:    kubeclient.Get(ctx),
@@ -82,6 +83,7 @@ func newControllerWithOptions(
 		podAutoscalerLister: paInformer.Lister(),
 		imageLister:         imageInformer.Lister(),
 		deploymentLister:    deploymentInformer.Lister(),
+		extension:           extension,
 	}
 
 	impl := revisionreconciler.NewImpl(ctx, c, func(impl *controller.Impl) controller.Options {
@@ -131,6 +133,12 @@ func newControllerWithOptions(
 	}
 	deploymentInformer.Informer().AddEventHandler(handleMatchingControllers)
 	paInformer.Informer().AddEventHandler(handleMatchingControllers)
+
+	// The stage pod autoscaler is used to determine the pod autoscaler.
+	spaInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
+		FilterFunc: pkgreconciler.LabelExistsFilterFunc(serving.RevisionLabelKey),
+		Handler:    controller.HandleAll(impl.EnqueueLabelOfNamespaceScopedResource("", serving.RevisionLabelKey)),
+	})
 
 	// We don't watch for changes to Image because we don't incorporate any of its
 	// properties into our own status and should work completely in the absence of
