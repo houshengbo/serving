@@ -19,7 +19,6 @@ package kpa
 import (
 	"context"
 	"fmt"
-	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	"net/http"
 	"time"
 
@@ -323,39 +322,30 @@ func (ks *scaler) applyScale(ctx context.Context, pa *autoscalingv1alpha1.PodAut
 }
 
 // scale attempts to scale the given PA's target reference to the desired scale.
-func (ks *scaler) scale(ctx context.Context, pa *autoscalingv1alpha1.PodAutoscaler, spa *v1.StagePodAutoscaler, sks *netv1alpha1.ServerlessService, desiredScale int32) (int32, error) {
+func (ks *scaler) scale(ctx context.Context, pa *autoscalingv1alpha1.PodAutoscaler, sks *netv1alpha1.ServerlessService, desiredScale int32) (int32, error) {
 	asConfig := config.FromContext(ctx).Autoscaler
 	logger := logging.FromContext(ctx)
 
 	if desiredScale < 0 && !pa.Status.IsActivating() {
-		logger.Info("Metrics are not yet being collected.")
+		logger.Debug("Metrics are not yet being collected.")
 		return desiredScale, nil
 	}
 
 	min, max := pa.ScaleBounds(asConfig)
-	if spa != nil {
-		minS, maxS := spa.ScaleBounds(asConfig)
-		if minS != nil && min > *minS {
-			min = *minS
-		}
-		if maxS != nil && *maxS < max {
-			max = *maxS
-		}
-	}
 	initialScale := kparesources.GetInitialScale(asConfig, pa)
 	// Log reachability as quoted string, since default value is "".
-	logger.Infof("MinScale = %d, MaxScale = %d, InitialScale = %d, DesiredScale = %d Reachable = %q",
+	logger.Debugf("MinScale = %d, MaxScale = %d, InitialScale = %d, DesiredScale = %d Reachable = %q",
 		min, max, initialScale, desiredScale, pa.Spec.Reachability)
 	// If initial scale has been attained, ignore the initialScale altogether.
 	if initialScale > 1 && !pa.Status.IsScaleTargetInitialized() {
 		// Ignore initial scale if minScale >= initialScale.
 		if min < initialScale {
-			logger.Infof("Adjusting min to meet the initial scale: %d -> %d", min, initialScale)
+			logger.Debugf("Adjusting min to meet the initial scale: %d -> %d", min, initialScale)
 		}
 		min = intMax(initialScale, min)
 	}
 	if newScale := applyBounds(min, max, desiredScale); newScale != desiredScale {
-		logger.Infof("Adjusting desiredScale to meet the min and max bounds before applying: %d -> %d", desiredScale, newScale)
+		logger.Debugf("Adjusting desiredScale to meet the min and max bounds before applying: %d -> %d", desiredScale, newScale)
 		desiredScale = newScale
 	}
 
