@@ -63,6 +63,12 @@ var _ ksvcreconciler.Interface = (*Reconciler)(nil)
 
 // ReconcileKind implements Interface.ReconcileKind.
 func (c *Reconciler) ReconcileKind(ctx context.Context, service *v1.Service) pkgreconciler.Event {
+	err1 := c.extension.PostConfigurationReconcile(ctx, service)
+	if err1 != nil {
+		return err1
+	}
+	service = c.extension.TransformService(service)
+
 	ctx, cancel := context.WithTimeout(ctx, pkgreconciler.DefaultTimeout)
 	defer cancel()
 
@@ -70,11 +76,6 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, service *v1.Service) pkg
 	config, err := c.config(ctx, service)
 	if err != nil {
 		return err
-	}
-
-	err1 := c.extension.PostConfigurationReconcile(ctx, service, config)
-	if err1 != nil {
-		return err1
 	}
 
 	if config.Generation != config.Status.ObservedGeneration {
@@ -158,12 +159,9 @@ func (c *Reconciler) config(ctx context.Context, service *v1.Service) (*v1.Confi
 func (c *Reconciler) route(ctx context.Context, service *v1.Service) (*v1.Route, error) {
 	recorder := controller.GetEventRecorder(ctx)
 	routeName := resourcenames.Route(service)
-	logger := logging.FromContext(ctx)
-	logger.Info("called extension TransformService")
-	serviceRec := c.extension.TransformService(service)
 	route, err := c.routeLister.Routes(service.Namespace).Get(routeName)
 	if apierrs.IsNotFound(err) {
-		route, err = c.createRoute(ctx, serviceRec)
+		route, err = c.createRoute(ctx, service)
 		if err != nil {
 			recorder.Eventf(service, corev1.EventTypeWarning, "CreationFailed", "Failed to create Route %q: %v", routeName, err)
 			return nil, fmt.Errorf("failed to create Route: %w", err)
@@ -175,7 +173,7 @@ func (c *Reconciler) route(ctx context.Context, service *v1.Service) (*v1.Route,
 		// Surface an error in the service's status, and return an error.
 		service.Status.MarkRouteNotOwned(routeName)
 		return nil, fmt.Errorf("service: %q does not own route: %q", service.Name, routeName)
-	} else if route, err = c.reconcileRoute(ctx, serviceRec, route); err != nil {
+	} else if route, err = c.reconcileRoute(ctx, service, route); err != nil {
 		return nil, fmt.Errorf("failed to reconcile Route: %w", err)
 	}
 	return route, nil

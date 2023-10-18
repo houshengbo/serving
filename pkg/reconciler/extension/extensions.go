@@ -55,9 +55,9 @@ import (
 
 // Extension enables pluggable extensive features added into the controller
 type Extension interface {
-	TransformRevision(*v1.Revision) *v1.Revision
+	TransformRevision(context.Context, *v1.Revision) (*v1.Revision, error)
 	PostRevisionReconcile(context.Context, *v1.Revision, *autoscalingv1alpha1.PodAutoscaler) error
-	PostConfigurationReconcile(context.Context, *v1.Service, *v1.Configuration) error
+	PostConfigurationReconcile(context.Context, *v1.Service) error
 	TransformService(*v1.Service) *v1.Service
 	UpdateExtensionStatus(context.Context, *v1.Service) (bool, error)
 }
@@ -69,15 +69,15 @@ func NoExtension() Extension {
 type nilExtension struct {
 }
 
-func (nilExtension) TransformRevision(revision *v1.Revision) *v1.Revision {
-	return revision
+func (nilExtension) TransformRevision(ctx context.Context, revision *v1.Revision) (*v1.Revision, error) {
+	return revision, nil
 }
 
 func (nilExtension) PostRevisionReconcile(context.Context, *v1.Revision, *autoscalingv1alpha1.PodAutoscaler) error {
 	return nil
 }
 
-func (nilExtension) PostConfigurationReconcile(context.Context, *v1.Service, *v1.Configuration) error {
+func (nilExtension) PostConfigurationReconcile(context.Context, *v1.Service) error {
 	return nil
 }
 
@@ -109,14 +109,14 @@ type progressiveRolloutExtension struct {
 	podAutoscalerLister       palisters.PodAutoscalerLister
 }
 
-func (e *progressiveRolloutExtension) TransformRevision(revision *v1.Revision) *v1.Revision {
+func (e *progressiveRolloutExtension) TransformRevision(ctx context.Context, revision *v1.Revision) (*v1.Revision, error) {
 	ns := revision.Namespace
 	paName := names.PA(revision)
 	spa, err := e.stagepodAutoscalerLister.StagePodAutoscalers(ns).Get(paName)
-	if apierrs.IsNotFound(err) {
-		return nil
+	if err != nil {
+		return revision, err
 	}
-	return makeRevC(revision, spa)
+	return makeRevC(revision, spa), nil
 }
 
 func (e *progressiveRolloutExtension) PostRevisionReconcile(ctx context.Context, revC *v1.Revision, pa *autoscalingv1alpha1.PodAutoscaler) error {
@@ -131,8 +131,8 @@ func (e *progressiveRolloutExtension) PostRevisionReconcile(ctx context.Context,
 	return nil
 }
 
-func (e *progressiveRolloutExtension) PostConfigurationReconcile(ctx context.Context, service *v1.Service, config *v1.Configuration) error {
-	_, err := e.serviceOrchestrator(ctx, service, config)
+func (e *progressiveRolloutExtension) PostConfigurationReconcile(ctx context.Context, service *v1.Service) error {
+	_, err := e.serviceOrchestrator(ctx, service)
 	if err != nil {
 		return err
 	}
@@ -149,8 +149,7 @@ func (e *progressiveRolloutExtension) TransformService(service *v1.Service) *v1.
 	if err != nil {
 		return service
 	}
-	rec := MakeRouteFromSo(service, so)
-	return rec
+	return MakeRouteFromSo(service, so)
 }
 
 func (e *progressiveRolloutExtension) UpdateExtensionStatus(ctx context.Context, service *v1.Service) (bool, error) {
@@ -223,22 +222,21 @@ func convertIntoTrafficTarget(service *v1.Service, revisionTarget []v1.RevisionT
 
 func MakeRouteFromSo(service *v1.Service, so *v1.ServiceOrchestrator) *v1.Service {
 	trafficTarget := convertIntoTrafficTarget(service, so.Spec.StageRevisionTarget)
-	serviceRec := service.DeepCopy()
-	serviceRec.Spec.RouteSpec = v1.RouteSpec{
+	service.Spec.RouteSpec = v1.RouteSpec{
 		Traffic: trafficTarget,
 	}
 	// Fill in any missing ConfigurationName fields when translating
 	// from Service to Route.
-	for idx := range serviceRec.Spec.Traffic {
-		if serviceRec.Spec.Traffic[idx].RevisionName == "" {
-			serviceRec.Spec.Traffic[idx].ConfigurationName = resourcenames.Configuration(service)
+	for idx := range service.Spec.Traffic {
+		if service.Spec.Traffic[idx].RevisionName == "" {
+			service.Spec.Traffic[idx].ConfigurationName = resourcenames.Configuration(service)
 		}
 	}
 
-	return serviceRec
+	return service
 }
 
-func (e *progressiveRolloutExtension) serviceOrchestrator(ctx context.Context, service *v1.Service, config *v1.Configuration) (*v1.ServiceOrchestrator, error) {
+func (e *progressiveRolloutExtension) serviceOrchestrator(ctx context.Context, service *v1.Service) (*v1.ServiceOrchestrator, error) {
 
 	recorder := controller.GetEventRecorder(ctx)
 
@@ -253,7 +251,7 @@ func (e *progressiveRolloutExtension) serviceOrchestrator(ctx context.Context, s
 	soName := resourcenames.ServiceOrchestrator(service)
 	so, err := e.serviceOrchestratorLister.ServiceOrchestrators(service.Namespace).Get(soName)
 	if apierrs.IsNotFound(err) {
-		so, err = e.createUpdateServiceOrchestrator(ctx, service, config, route, nil, true)
+		so, err = e.createUpdateServiceOrchestrator(ctx, service, route, nil, true)
 		if err != nil {
 			recorder.Eventf(service, corev1.EventTypeWarning, "CreationFailed", "Failed to create ServiceOrchestrator %q: %v", soName, err)
 			return nil, fmt.Errorf("failed to create ServiceOrchestrator: %w", err)
@@ -265,22 +263,22 @@ func (e *progressiveRolloutExtension) serviceOrchestrator(ctx context.Context, s
 		// Surface an error in the service's status,and return an error.
 		service.Status.MarkServiceOrchestratorNotOwned(soName)
 		return nil, fmt.Errorf("service: %q does not own ServiceOrchestrator: %q", service.Name, soName)
-	} else if so, err = e.reconcileServiceOrchestrator(ctx, service, config, route, so); err != nil {
+	} else if so, err = e.reconcileServiceOrchestrator(ctx, service, route, so); err != nil {
 		return nil, fmt.Errorf("failed to reconcile Configuration: %w", err)
 	}
 
 	return nil, nil
 }
 
-func (e *progressiveRolloutExtension) createUpdateServiceOrchestrator(ctx context.Context, service *v1.Service, config *v1.Configuration,
+func (e *progressiveRolloutExtension) createUpdateServiceOrchestrator(ctx context.Context, service *v1.Service,
 	route *v1.Route, so *v1.ServiceOrchestrator, create bool) (*v1.ServiceOrchestrator, error) {
 	// To create the service, orchestrator, we need to make sure we have stageTraffic and Traffic in the spec, and
 	// stageReady, and Ready in the status.
 	records := map[string]resources.RevisionRecord{}
 
-	lister := e.revisionLister.Revisions(config.Namespace)
+	lister := e.revisionLister.Revisions(service.Namespace)
 	list, err := lister.List(labels.SelectorFromSet(labels.Set{
-		serving.ConfigurationLabelKey: config.Name,
+		serving.ConfigurationLabelKey: service.Name,
 	}))
 
 	logger := logging.FromContext(ctx)
@@ -311,7 +309,7 @@ func (e *progressiveRolloutExtension) createUpdateServiceOrchestrator(ctx contex
 	//	return nil, fmt.Errorf("failed to get the revision: %w", err)
 	//}
 
-	so = resources.MakeServiceOrchestrator(service, config, route, records, logger, so)
+	so = resources.MakeServiceOrchestrator(service, route, records, logger, so)
 	if create {
 		so, err = e.client.ServingV1().ServiceOrchestrators(service.Namespace).Create(
 			ctx, so, metav1.CreateOptions{})
@@ -333,9 +331,9 @@ func (e *progressiveRolloutExtension) createUpdateServiceOrchestrator(ctx contex
 	return so, err
 }
 
-func (e *progressiveRolloutExtension) reconcileServiceOrchestrator(ctx context.Context, service *v1.Service, config *v1.Configuration,
+func (e *progressiveRolloutExtension) reconcileServiceOrchestrator(ctx context.Context, service *v1.Service,
 	route *v1.Route, so *v1.ServiceOrchestrator) (*v1.ServiceOrchestrator, error) {
-	so1, err := e.createUpdateServiceOrchestrator(ctx, service, config, route, so, false)
+	so1, err := e.createUpdateServiceOrchestrator(ctx, service, route, so, false)
 	if err != nil {
 		return so, err
 	}
@@ -736,7 +734,6 @@ func (e *progressiveRolloutExtension) lowestLoad(rt []v1.RevisionTarget, index i
 }
 
 func makeRevC(rev *v1.Revision, spa *v1.StagePodAutoscaler) *v1.Revision {
-	//revC := rev.DeepCopy()
 	if spa.Spec.MinScale != nil {
 		rev.Annotations[autoscaling.MinScaleAnnotationKey] = fmt.Sprintf("%v", *spa.Spec.MinScale)
 	}

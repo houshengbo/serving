@@ -148,7 +148,10 @@ func (c *Reconciler) reconcilePA(ctx context.Context, rev *v1.Revision) error {
 	paName := resourcenames.PA(rev)
 	logger := logging.FromContext(ctx)
 	logger.Info("Reconciling PA: ", paName)
-
+	rev, err := c.extension.TransformRevision(ctx, rev)
+	if err != nil {
+		return err
+	}
 	pa, err := c.podAutoscalerLister.PodAutoscalers(ns).Get(paName)
 	if apierrs.IsNotFound(err) {
 		// PA does not exist. Create it.
@@ -165,6 +168,10 @@ func (c *Reconciler) reconcilePA(ctx context.Context, rev *v1.Revision) error {
 		return fmt.Errorf("revision: %q does not own PodAutoscaler: %q", rev.Name, paName)
 	}
 
+	//rev, err = c.extension.TransformRevision(rev)
+	//if err != nil {
+	//	return err
+	//}
 	// Perhaps tha PA spec changed underneath ourselves?
 	// We no longer require immutability, so need to reconcile PA each time.
 	tmpl := resources.MakePA(rev)

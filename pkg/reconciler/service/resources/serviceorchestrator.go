@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"knative.dev/serving/pkg/apis/serving"
 	"strconv"
 
 	"knative.dev/pkg/kmeta"
@@ -41,7 +42,7 @@ type RevisionRecord struct {
 }
 
 // MakeServiceOrchestrator creates a ServiceOrchestrator from a Service object.
-func MakeServiceOrchestrator(service *v1.Service, config *v1.Configuration, route *v1.Route, records map[string]RevisionRecord,
+func MakeServiceOrchestrator(service *v1.Service, route *v1.Route, records map[string]RevisionRecord,
 	logging *zap.SugaredLogger, so *v1.ServiceOrchestrator) *v1.ServiceOrchestrator {
 	// The ultimate revision target comes from the service.
 
@@ -51,7 +52,7 @@ func MakeServiceOrchestrator(service *v1.Service, config *v1.Configuration, rout
 	logging.Info(service.Status)
 	var initialRevisionStatus, ultimateRevisionTarget []v1.RevisionTarget
 
-	lastRN := kmeta.ChildName(config.Name, fmt.Sprintf("-%05d", config.Generation))
+	lastRN := kmeta.ChildName(service.Name, fmt.Sprintf("-%05d", service.Generation))
 
 	logging.Info("lastRN is")
 	logging.Info(lastRN)
@@ -196,6 +197,7 @@ func MakeServiceOrchestrator(service *v1.Service, config *v1.Configuration, rout
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      names.ServiceOrchestrator(service),
 				Namespace: service.Namespace,
+				Labels:    map[string]string{serving.ServiceLabelKey: service.Name},
 				OwnerReferences: []metav1.OwnerReference{
 					*kmeta.NewControllerRef(service),
 				},
