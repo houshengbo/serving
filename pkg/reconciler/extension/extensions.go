@@ -116,8 +116,7 @@ func (e *progressiveRolloutExtension) TransformRevision(revision *v1.Revision) *
 	if apierrs.IsNotFound(err) {
 		return nil
 	}
-	revC := makeRevC(revision, spa)
-	return revC
+	return makeRevC(revision, spa)
 }
 
 func (e *progressiveRolloutExtension) PostRevisionReconcile(ctx context.Context, revC *v1.Revision, pa *autoscalingv1alpha1.PodAutoscaler) error {
@@ -737,13 +736,13 @@ func (e *progressiveRolloutExtension) lowestLoad(rt []v1.RevisionTarget, index i
 }
 
 func makeRevC(rev *v1.Revision, spa *v1.StagePodAutoscaler) *v1.Revision {
-	revC := rev.DeepCopy()
+	//revC := rev.DeepCopy()
 	if spa.Spec.MinScale != nil {
-		revC.Annotations[autoscaling.MinScaleAnnotationKey] = fmt.Sprintf("%v", *spa.Spec.MinScale)
+		rev.Annotations[autoscaling.MinScaleAnnotationKey] = fmt.Sprintf("%v", *spa.Spec.MinScale)
 	}
 
 	if spa.Spec.MaxScale != nil {
-		revC.Annotations[autoscaling.MaxScaleAnnotationKey] = fmt.Sprintf("%v", *spa.Spec.MaxScale)
+		rev.Annotations[autoscaling.MaxScaleAnnotationKey] = fmt.Sprintf("%v", *spa.Spec.MaxScale)
 	}
-	return revC
+	return rev
 }

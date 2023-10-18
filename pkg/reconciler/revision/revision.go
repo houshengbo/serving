@@ -18,6 +18,7 @@ package revision
 
 import (
 	"context"
+	resourcenames "knative.dev/serving/pkg/reconciler/revision/resources/names"
 	"strings"
 	"time"
 
@@ -115,6 +116,7 @@ func (c *Reconciler) reconcileDigest(ctx context.Context, rev *v1.Revision) (boo
 
 // ReconcileKind implements Interface.ReconcileKind.
 func (c *Reconciler) ReconcileKind(ctx context.Context, rev *v1.Revision) pkgreconciler.Event {
+	rev = c.extension.TransformRevision(rev)
 	ctx, cancel := context.WithTimeout(ctx, pkgreconciler.DefaultTimeout)
 	defer cancel()
 
@@ -166,6 +168,16 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, rev *v1.Revision) pkgrec
 		logger.Info("Revision stopped being ready")
 	}
 
+	ns := rev.Namespace
+	paName := resourcenames.PA(rev)
+	pa, err := c.podAutoscalerLister.PodAutoscalers(ns).Get(paName)
+	if err != nil {
+		return err
+	}
+	err = c.extension.PostRevisionReconcile(ctx, rev, pa)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
