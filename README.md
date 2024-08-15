@@ -19,6 +19,7 @@ The Knative Serving project provides middleware primitives that enable:
 - Routing and network programming
 - Point-in-time snapshots of deployed code and configurations
 
+
 For documentation on using Knative Serving, see the
 [serving section](https://www.knative.dev/docs/serving/) of the
 [Knative documentation site](https://www.knative.dev/docs).
